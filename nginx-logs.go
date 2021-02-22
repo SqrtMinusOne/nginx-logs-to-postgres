@@ -84,21 +84,23 @@ func parseLine(line string) ([]interface{}, time.Time) {
 			parsed[i] = nil
 		}
 	}
-	return parsed, time.Now()
+	return parsed, reqTime
 }
 
-func storeLogs(logs []string, conn *pgx.Conn) {
+func storeLogs(logs []string, conn *pgx.Conn, lastEntryTime time.Time) {
 	rows := make([][]interface{}, 0, len(logs))
 	for _, line := range logs {
 		fmt.Println(line)
-		parsed, _ := parseLine(line)
-		rows = append(rows, parsed)
+		parsed, entryTime := parseLine(line)
+		if entryTime.After(lastEntryTime) {
+			rows = append(rows, parsed)
+		}
 	}
 	if len(rows) > 0 {
 		_, err := conn.CopyFrom(
 			context.Background(),
 			pgx.Identifier{os.Getenv("TABLE_SCHEMA"), os.Getenv("TABLE_NAME")},
-			[]string{"time_local", "path", "ip", "server_name", "remote_user", "remote_port", "time", "user_agent", "user_id_got", "user_id_set", "request", "status",  "body_bytes_sent", "request_time", "request_method", "geoip_country_code", "http_referrer"},
+			[]string{"time_local", "path", "ip", "server_name", "remote_user", "remote_port", "time", "user_agent", "user_id_got", "user_id_set", "request", "status", "body_bytes_sent", "request_time", "request_method", "geoip_country_code", "http_referrer"},
 			pgx.CopyFromRows(rows),
 		)
 		if err != nil {
@@ -106,6 +108,9 @@ func storeLogs(logs []string, conn *pgx.Conn) {
 			panic(err)
 		}
 		log.Printf("Stored %d entries\n", len(rows))
+	}
+	if len(rows) != len(logs) {
+		log.Printf("Skipped %d entries\n", len(logs) - len(rows))
 	}
 }
 
@@ -115,12 +120,29 @@ func processLogs(conn *pgx.Conn) {
 	buffer := make([]string, 0, 100)
 	var s string
 	flushTime, _ := strconv.ParseInt(os.Getenv("FLUSH_MS"), 10, 64)
+
+	var lastEntryString string
+	var lastEntryTime time.Time
+	err := conn.QueryRow(
+		context.Background(),
+		fmt.Sprintf("SELECT MAX(time)::text max FROM \"%s\".\"%s\"", os.Getenv("TABLE_SCHEMA"), os.Getenv("TABLE_NAME")),
+	).Scan(&lastEntryString)
+	if err != nil {
+		log.Println("First time sync")
+	} else {
+		log.Printf("Last entry time: %s", lastEntryString)
+		lastEntryTime, err = time.Parse("2006-01-02 15:04:05", lastEntryString)
+		if err != nil {
+			panic(err)
+		}
+	}
+
 	for {
 		s = <-logString
 		now = time.Now()
 		buffer = append(buffer, s)
-		if now.Sub(lastSync).Milliseconds() >= flushTime || now.Sub(lastSync).Milliseconds() < 100 {
-			storeLogs(buffer, conn)
+		if now.Sub(lastSync).Milliseconds() >= flushTime {
+			storeLogs(buffer, conn, lastEntryTime)
 			buffer = buffer[:0]
 			lastSync = now
 		}
