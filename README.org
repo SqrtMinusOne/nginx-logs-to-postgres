@@ -1,0 +1,39 @@
+* nginx-logs-to-postgres
+A simple program to store nginx logs to PostgreSQL.
+
+** Usage
+Set nginx log format as follows:
+
+#+begin_src conf-space
+log_format json_combined '{"time_local": "$time_local", '
+    '"path": "$request_uri", '   
+    '"ip": "$remote_addr", '
+    '"server_name": "$server_name", '
+    '"remote_user": "$remote_user", '
+    '"remote_port": "$remote_port", '
+    '"time": "$time_iso8601", '
+    '"user_agent": "$http_user_agent", '
+    '"user_id_got": "$uid_got", '
+    '"user_id_set": "$uid_set", '
+    '"request": "$request", '
+    '"status": "$status", '
+    '"body_bytes_sent": "$body_bytes_sent", '
+    '"request_time": "$request_time", '
+    '"request_method": "$request_method", '
+    '"geoip_country_code": "$geoip_country_code", '
+    '"http_referrer": "$http_referer" }';
+access_log /var/log/nginx/access.log json_combined;
+#+end_src
+
+To change the set of fields, edit the =createTemplate= string, =parseLine= and =storeLogs= functions.
+
+Set the following variables to .env file:
+- =DATABASE_URL= - [[https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING][PostgreSQL connection URI]]
+- =TABLE_SCHEMA=, =TABLE_NAME=
+- =LOG_FILE= - path to the nginx log file. Make sure it exists and the program can read it
+- =FLUSH_MS= - rate limit to inserts
+
+Run the program
+#+begin_src bash
+./nginx-logs
+#+end_src
