@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
+	"regexp"
 	"text/template"
 	"time"
 
@@ -50,8 +51,11 @@ func jsonGetUid(val interface{}) interface{} {
 	return s[4:]
 }
 
+var hexRegex = regexp.MustCompile(`\\x[0-9A-F]{2}`)
+
 func parseLine(line string) ([]interface{}, time.Time) {
 	var datum map[string]interface{}
+	line = hexRegex.ReplaceAllString(line, "?")
 	err := json.Unmarshal([]byte(line), &datum)
 	if err != nil {
 		panic(err)
@@ -90,7 +94,6 @@ func parseLine(line string) ([]interface{}, time.Time) {
 func storeLogs(logs []string, conn *pgx.Conn, lastEntryTime time.Time) {
 	rows := make([][]interface{}, 0, len(logs))
 	for _, line := range logs {
-		fmt.Println(line)
 		parsed, entryTime := parseLine(line)
 		if entryTime.After(lastEntryTime) {
 			rows = append(rows, parsed)
