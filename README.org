@@ -2,6 +2,12 @@
 A simple program to store nginx logs to PostgreSQL.
 
 ** Usage
+#+begin_src bash
+git clone git@github.com:SqrtMinusOne/nginx-logs-to-postgres.git
+cd ./nginx-logs-to-postgres
+go build nginx-logs
+#+end_src
+
 Set nginx log format as follows:
 
 #+begin_src conf-space
@@ -36,4 +42,12 @@ Set the following variables to .env file:
 Run the program
 #+begin_src bash
 ./nginx-logs
+#+end_src
+
+** Example supervisor config
+#+begin_src conf
+[program:nginx-logs]
+command=/home/pavel/bin/nginx-logs-to-postgres/nginx-logs
+directory=/home/pavel/bin/nginx-logs-to-postgres/
+autostart=true
 #+end_src
